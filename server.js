@@ -3,8 +3,9 @@
  *
  * Run:   node server.js
  * Env:   PORT         port (default 3000)
- *        ADMIN_KEY1   admin login layer 1 (required)
- *        ADMIN_KEY2   admin login layer 2 (required)
+ *        ADMIN_KEY1   admin login layer 1 (optional)
+ *        ADMIN_KEY2   admin login layer 2 (optional)
+ *                     If either is missing there is NO login: anyone with the link can manage keys.
  *        PROXY_HOPS   proxies in front of this server (default 1; use 0 if exposed directly).
  *                     Only used for rate limiting - keys are locked by HWID, not IP.
  *        DATA_DIR     where data.json is saved (default: this folder)
@@ -20,10 +21,8 @@ const crypto = require('crypto');
 const PORT = +process.env.PORT || 3000;
 const ADMIN1 = process.env.ADMIN_KEY1;
 const ADMIN2 = process.env.ADMIN_KEY2;
-if (!ADMIN1 || !ADMIN2) {
-  console.error('Set environment variables ADMIN_KEY1 and ADMIN_KEY2 (admin login layers 1 and 2).');
-  process.exit(1);
-}
+const AUTH = !!(ADMIN1 && ADMIN2);
+if (!AUTH) console.warn('WARNING: ADMIN_KEY1/ADMIN_KEY2 not set -> admin page has no login (open to anyone with the link)');
 const HOPS = process.env.PROXY_HOPS === undefined ? 1 : +process.env.PROXY_HOPS;
 const DATA = path.join(process.env.DATA_DIR || __dirname, 'data.json');
 const DAY = 86400000;
@@ -90,6 +89,7 @@ function cleanup() {
 }
 setInterval(cleanup, 60000).unref();
 function isAdmin(req) {
+  if (!AUTH) return true;
   const t = req.headers['x-token'];
   const exp = t && sessions.get(t);
   return !!exp && Date.now() < exp;
@@ -174,7 +174,7 @@ const server = http.createServer(async (req, res) => {
     return send(res, 200, verify(req, await readBody(req)));
   }
 
-  if (req.method === 'GET' && p === '/api/ping') return send(res, 200, { ok: true });
+  if (req.method === 'GET' && p === '/api/ping') return send(res, 200, { ok: true, auth: AUTH });
 
   // ----- admin login (2 layers); only wrong attempts count toward the limit -----
   if (req.method === 'POST' && p === '/api/admin/step1') {
