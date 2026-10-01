@@ -479,7 +479,14 @@ body.locked .wrap { visibility: hidden; }
   $("lockPage").onclick = function () { api("POST", "/api/admin/logout").then(function () { relock(); }); };
 
   renderChips();
-  if (TOKEN) { document.body.classList.remove("locked"); startLoading(); } else { showStep(); ping(); }
+  // if the server has no admin keys set, there is no login screen at all
+  fetch("/api/ping").then(function (r) { return r.json(); }).then(function (j) {
+    if (j && j.ok && j.auth === false) {
+      $("lockPage").style.display = "none";
+      document.body.classList.remove("locked"); startLoading();
+    } else if (TOKEN) { document.body.classList.remove("locked"); startLoading(); }
+    else { showStep(); ping(); }
+  }, function () { showStep(); ping(); });
 })();
 
 // sakura petals
